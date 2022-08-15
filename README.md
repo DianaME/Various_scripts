@@ -1,2 +1,2 @@
 # Various_scripts
-I made This scripts for the homeworks of the Quantitative methods for ecology class. 
+I made these scripts for the homeworks of a class I took (Quantitative methods for ecology). 
