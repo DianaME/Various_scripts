@@ -1,0 +1,464 @@
+---
+title: "Untitled"
+author: "Diana Escamilla"
+date: "December 1, 2019"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+1) Data were collected on the antenna lenghts of 997 mosquitoes sampled from forest interior and forest edge habitats. These lenghts are stored in the file mosquito.csv, along with an index variable in column 1 designating habitat from wich the mosquito was collected (grp varaible: 0= interior, 1=edge)
+a) Use resampling methods to test the null hypothesis that antennae lenghts do no differ as a funtion of forest  habitat. proposed a verbal explanation for the method you use. 
+
+```{r}
+##loading libraries
+library(gtools)     # for permutations and combinations
+library(bootstrap)  # for jackknife function
+library(asbio)      # bootstrap and c.i.
+library(car)        # bootstrap regressions
+library(caret)      # cross-validation
+library(ROCR)       # AUC, performance metrics
+
+data<- read.csv("./mosquito.csv")
+
+##randomization test 
+#compute the observed test statistic 
+#I will use the difference in the mean antennae lenght of mosquitoes from the two fores habitat 
+interior<- data[data$grp== unique(data$grp)[1],]
+edge<- data[data$grp==unique(data$grp)[2],]
+
+D.obs<- mean (interior[,2]) - mean(edge[,2])
+D.obs #difference in the mean of antennae lenght among mosquitoes from thte two forest habitats
+##randomly rearrange the index values among the 997 individuals (without replacement)
+##then compute the means for member of each group and their difference 
+test = function(){
+  # randomly shuffle the i (=20) group IDs, store in i.b
+  i.b <- sample(data$grp,size=length(data$grp)) 
+  # next, compute mean differences between the 2 randomly determined groups:
+  mean(data$length[i.b==unique(data$grp)[1]]) - mean(data$length[i.b==unique(data$grp)[2]])
+}
+
+##replicate this randomization test n times 
+ntimes<-3000
+test.diff = replicate(ntimes,test())
+
+x.rng = range(test.diff)
+hist(test.diff, freq=F, xlim=x.rng)		# resulting distribution of test.stat
+
+abline(v=D.obs, lwd=2)				        # observed difference in means
+mean(test.diff)                       # estimated mean under null hyp.
+quantile(test.diff, c(0.025,0.975))   # 95% quantiles under null hyp.
+sum(test.diff > D.obs)/ntimes         # compute quasi p value.
+
+```
+The proposed method was a randomization test. 
+The null hypothesis is that the mean of anthen lenght among the two habitat groups (interior an edge forest) are equal.
+1) To do that I used the differences in the mean for the two gropus (interior and edge forest habitat) as the test statistic. I computed the observe difference and it was 0.311
+2) then I randomly rearrange thte lables for the forest habitat (interior, edge) and recalculate the differnece in mean of antheanea lenght of groups (D)
+3) I repeat this 3000 times to get an empirical distribution for D
+4) then if the proportion of (Dnull >= Dobs) is <= alpha , reject the null hypothesis 
+t= (bj - 0)/SE(bj)
+with an alpha of 0.05 we have that the quasi p-value (0.00066) is smaller than 0.05. Therefore, we reject the null hypothesis and conclude that the mean of anthenae lenght of mosquitoes differ as a function of the forest habitat.
+
+b) Use resampling methods to test the null hypothesis that habitat-specific variances in antenane lengths do not differe. Again provide verbal explanation for the methdo you use.
+```{r}
+#randomization test 
+#compute the observed test statistic 
+#I will use the F=S2X/S2Y ratio of the variance of antennae lenght of mosquitoes from the two fores habitat 
+interior<- data[data$grp== unique(data$grp)[1],] 
+edge<- data[data$grp==unique(data$grp)[2],]
+
+F.obs<- (var(interior[,2]))/ (var(edge[,2]))
+F.obs #difference in the  ratio of variance of antennae lenght among mosquitoes from the two forest habitats
+##randomly rearrange the index values among the 997 individuals (without replacement)
+##then compute the variance for member of each group and their difference 
+test = function(){
+  # randomly shuffle the i (=20) group IDs, store in i.b
+  i.b <- sample(data$grp,size=length(data$grp)) 
+  # next, compute mean differences between the 2 randomly determined groups:
+  (var(data$length[i.b==unique(data$grp)[1]]))/ (var(data$length[i.b==unique(data$grp)[2]]))
+}
+
+##replicate this randomization test n times 
+ntimes<-3000
+test.diff = replicate(ntimes,test())
+
+x.rng = range(test.diff)
+hist(test.diff, freq=F, xlim=x.rng)		# resulting distribution of test.stat
+
+abline(v=F.obs, lwd=2)				        # observed difference in variances
+mean(test.diff)                       # estimated mean under null hyp.
+quantile(test.diff, c(0.025,0.975))   # 95% quantiles under null hyp.
+sum(test.diff > F.obs)/ntimes         # compute quasi p value.
+
+```
+The null hypothesis is that the variance of anthen lenght among the two habitat groups (interior an edge forest) are equal.
+1) To do that I used the differences in the variance for the two gropus (interior and edge forest habitat) as the test statistic. I computed the observe difference and it was -2.944
+2) then I randomly rearrange the lables for the forest habitat (interior, edge) and recalculate the observe differnce in variance of antheanea lenght of the two groups (D)
+3) I repeat this 3000 times to get an empirical distribution for D
+4) then if the proportion of (Dnull >= Dobs) is <= alpha , reject the null hypothesis 
+t= (bj - 0)/SE(bj)
+with an alpha of 0.05 we have that the quasi p-value (1) is higher than 0.05. Therefore, we reject the null hypothesis and conclude that the varaince of anthenae lenght of mosquitoes do not differ as a function of the forest habitat.
+
+c) Describe and interpret the results from 1.a and 1.b
+
+Two randomization tests were used, for testing if there are differences in mean and variances of antheane lenght of mosquitoes among the two forest habitat.
+For the mean the quasi p-value obtain was of 0.0006 which is smaller than 0.05 indicating that there are differences in the mean of mosquitoe anthena lenght due to the habitat where they are. 
+
+For the variance the quasi p-value was close to 1, which is higher than 0.05 indicating that there are not diffrences in the variance of mosquitoe anthena lenght due to the habitat.
+Thus, anthena lenght of mosquitoe differ from the habitat where they growth however the varation on this trait doesn't seem to be affected by the habitat. 
+
+2) Data were collected from a global warming study above the artic circle. Scientist randomly assigned 4 plots of tundra to one of each of the following treatments: ambient control; daytime warming, nightime warming; whole day(24 hour) warming
+
+Numerous responses for each of the 16 plots were collected each year for 11 consecutive years. One of hte response measures was soil temperature, which was approximately normal distributed. These data can be found in file soiltemp.csv
+
+a) Fit random-intercept models (what is the random grouping variable?) 
+
+In this case the random grouping variable is plot 
+
+with the following fixed effects structure. For each model, report results of Anova() drop in deviance tests, as well as marginal and conditional pseudo R2 values
+
+```{r}
+data1<- read.csv("./SoilTemp.csv")
+
+##loading lybraries
+
+library(lattice)
+library(lme4)
+library(blmeco)
+library(car)
+library(effects)
+
+# i) model 1: Interaction of treatment and year, whit year as continous (integer)
+M1<- lmer(ST ~TRT *Year + (1|Plot), data=data1)
+summary(M1)
+drop1(M1, test = "Chi")
+Anova(M1)
+
+#ii) model 2: additive effects of treatment and year; year as continous integer
+M2<- lmer(ST ~TRT +Year + (1|Plot), data=data1)
+summary(M2)
+drop1(M2, test = "Chi")
+Anova(M2)
+
+
+```
+
+The additive model is the best model with a smaller AIC score. In addition in the M1 the interaction of TRT and Year was not significant. 
+
+iv) for the best of these two models, provide a plot of effects of covariates
+
+```{r}
+plot(allEffects(M2)) ##ploting the effects for the best model 
+
+```
+b) convert year to a factor variable and re-fit the models from 2ai  and 2aii.
+```{r}
+data2<- data1
+data2$Year<- as.factor(data2$Year)
+
+M3<- lmer(ST ~TRT *Year + (1|Plot), data=data2)
+summary(M3)
+drop1(M3, test = "Chi")
+Anova(M3)
+
+#ii) model 2: additive effects of treatment and year; year as continous integer
+M4<- lmer(ST ~TRT +Year + (1|Plot), data=data2)
+summary(M4)
+drop1(M4, test = "Chi")
+Anova(M4)
+
+```
+
+i) compare the additive models from 2aii and 2b. Explain discrepancies in R2 
+When comparing both models we have a smaller AIC score int he 2b because we are accounting for the interaction of each year with the treatments. when using as a factor 
+
+
+
+c) refit each for the four models from 2a and 2b as fixed-effect model Explain discrepancies in R2, cAIC4 and MuMIn to compare these 8 competing models. 
+
+```{r}
+
+M5<- lm(ST ~TRT *Year*Plot, data=data1)
+
+
+#ii) model 2: additive effects of treatment and year; year as continous integer
+M6<- lm(ST ~TRT +Year + Plot, data=data1)
+
+
+## using year as a factor
+M7<- lm(ST ~TRT *Year*Plot, data=data2)
+
+
+#ii) model 2: additive effects of treatment and year; year as factor
+M8<- lm(ST ~TRT +Year + Plot, data=data2)
+
+#i) show results of your comparison
+##comparisons using cAIC4, MuMIn 
+library(cAIC4)
+aic.M1 <- cAIC(M1)
+aic.M2 <- cAIC(M2)
+aic.M3 <- cAIC(M3)
+aic.M4 <- cAIC(M4)
+aic.M5 <- cAIC(M5)
+aic.M6 <- cAIC(M6)
+aic.M7 <- cAIC(M7)
+aic.M8 <- cAIC(M8)
+
+AIC.results<- c(aic.M1$caic, aic.M2$caic, aic.M3$caic, aic.M4$caic, aic.M5$caic, aic.M6$caic, aic.M7$caic, aic.M8$caic)
+AIC.results<- as.numeric(AIC.results)
+names<- c("M1","M2","M3", "M4", "M5", "M6", "M7", "M8")
+AIC<- cbind(names, AIC.results)
+AIC
+
+library(MuMIn) 
+R2M1<-round(r.squaredGLMM(M1),3)
+R2M2<-round(r.squaredGLMM(M2),3)
+R2M3<-round(r.squaredGLMM(M3),3)
+R2M4<-round(r.squaredGLMM(M4),3)
+R2M5<-round(r.squaredGLMM(M5),3)
+R2M6<-round(r.squaredGLMM(M6),3)
+R2M7<-round(r.squaredGLMM(M7),3)
+R2M8<-round(r.squaredGLMM(M8),3)
+R2.Results<- rbind(R2M1,R2M2,R2M3,R2M4,R2M5,R2M6,R2M7,R2M8)
+ResultsR2<- cbind(names, R2.Results)
+ResultsR2
+```
+ii which model is best
+Based on the AIC results and the marginal R2 we have that the best model is model M4 that is the addittive model but fitting year as factor variable
+
+iii provide a plot of effects of covariates for the best model
+
+```{r}
+library(effects)
+plot(allEffects(M4)) ##ploting the effects for the best model 
+```
+
+iV) for the best of the mixed models compute and interpret the intraclass correlation coefficient
+
+```{r}
+M2
+intraclasscor<- (0.1229/(0.8336+0.1229))
+intraclasscor
+```
+
+3) Aliens visited Earth 1419, established a likeness of their ruler visible from space on an island a the mouth of the Amazon. Then, they collected heights (in inches) of 50 human male. They returned in the late 1700s and checked a book on Bayesian analysis out of the library at University of Endinburgh. To mark the 600 aniversary of their expedition to the green-and-blue planet, they returned in 2019 and again measured the heights of 50 human males. They would have stayed and occupied the planet but they didnt have cash to pay the overdue fine for the Bayesian book. Still, they were pleased to see that their ruler's show had been syndicated
+The 2019 heigh data are stored int he file HW_aliens.csv
+
+a) conduct a Bayesian analysis of the mean for the data collected in 2019 using vague(=flat=uninformative) priors. Show the posterior distribution for both the mean and standard deviation for the distribution of heights. Report your estimate of the mean and standard deviation for the distribution of heights.
+
+```{r}
+
+data2<- read.csv("./HW_aliens.csv", header = F)
+#1.	Specify Analysis in R
+#library(R2jags)
+library(jagsUI)
+# Analysis in JAGS
+#####
+# Often convenient to keep model code in a separate file, which can be called
+# when running jags(). Note that the path needs to be provided (here, it's in
+# the working directory):
+#modFile = "jags_model_mean.R"  # name of jags model code (inserted as arg in jags call)
+#####
+
+# Or, we can embed the model into a single script:
+# Save JAGS description of the model to working directory
+# sink() diverts R output to a specified connection
+sink("jags_model_mean.txt")	# write to file of specified name
+cat("
+    model {
+    
+    # Priors
+    population.mean ~ dunif(0,5000)		    # Uniform w/min=0 and max=5000
+    precision <- 1 / population.variance	# Precision = 1/variance
+    population.variance <- population.sd * population.sd
+    population.sd ~ dunif(0,100)          # Uniform over [0,100]
+    
+    # Likelihood                                  Model structure: normal distribution
+    for(i in 1:nobs){                           # Use observations to estimate
+    mass[i] ~ dnorm(population.mean, precision) # these population parameters
+    }                                           # jags requires precision (1/var)
+    }
+    ",fill=TRUE)  # fill argument governs line breaks
+sink() # this ends the diversion writing to a separate file
+
+#2.	Send to JAGS
+# Package all the stuff to be handed over to JAGS (data and # of obsns)
+# Bundle data; note that names must match names in model (mass, nobs)
+jags.data <- list(mass = data2$V1, nobs = length(data2$V1))
+
+# Function to generate random starting values. Not necessary for JAGS
+# except with some latent variables. Don't need it here.
+#inits <- function()
+#  list (population.mean = rnorm(1,600), population.sd = runif(1, 1, 30))
+# the list contains a random normal draw with a mean of 600 and sd=1
+# and a standard deviation initial value taken from a uniform [1, 30]
+
+# Parameters to be monitored (= to estimate).  These are the parameters
+# for which we want JAGS to save the posterior draws
+params <- c("population.mean", "population.sd", "population.variance")
+
+# MCMC settings
+nc <- 3		# Number of chains
+ni <- 4000		# Number of draws from posterior (for each chain)
+nb <- 2000		# Number of draws to discard as burn-in
+nt <- 10		# Thinning rate
+
+# Function jags() is called to perform the analysis in JAGS 
+# and put its results into an R object called out.
+
+# Start Gibbs sampler: Run model in JAGS and save results in object out
+# The following jags() call is for the embedded model (see model.file arg)
+#out <- jags(data = jags.data, inits = NULL, parameters.to.save = params, 
+#            model.file = "jags_model_mean.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+#save(out, file="out.Rdata")
+load("./out.Rdata")
+
+#JAGS shows progress bar. 
+#"Plusses" indicate the burn in
+#Asterisks are the actual model run
+
+#3.	View Results
+# concatenated list combining all chains
+# how many elements in the posterior distribution for the mean?
+length(out$sims.list$population.mean)
+
+#Look at trace plots for chains (one parameter at a time)
+par(mfrow=c(1,1))
+traceplot(out)	# Activate the plot by hitting "Enter" or left click mouse
+			
+# Hit "Enter" or left click to advance to next trace plot
+
+# We can also produce graphical summaries, e.g., histograms of the posterior 
+# distributions for each parameter:
+hist(out$sims.list$population.mean, col = "grey")
+hist(out$sims.list$population.sd, col = "blue")
+hist(out$sims.list$population.variance, col = "red")
+
+# Numerical summaries of the posterior distribution can also be obtained, 
+# with the standard deviation requested separately:
+summary(out$sims.list$population.mean)
+summary(out$sims.list$population.sd)
+sd(out$sims.list$population.mean)
+sd(out$sims.list$population.sd)
+
+
+```
+the estimate mean from the posterior distribution is 68.73 and the standard deviation is 4.128
+
+b) instead of conducting the analysis in part a, the aliens insisted on using informed priors. To do so, they reasoned that since 1 alien year was the equivalent of 1000 earth years, it would be logical to use the data collected in 1419 for their prior information. They inspected the data and found that the minimum height was 57 and maximum height was 68. They further reasoned that the population standard deviation for height would fall between 3 (min) and 5(max). They used informed priors for both of these parameters. Show posterior distributions for both the mean and standar deviation of heights in 2019 resulting from their analysis. Report your estimate of the mean and standard deviation for the distribution of heigt in 2019.
+
+```{r}
+#1.	Specify Analysis in R
+#library(R2jags)
+library(jagsUI)
+# Analysis in JAGS
+#####
+# Often convenient to keep model code in a separate file, which can be called
+# when running jags(). Note that the path needs to be provided (here, it's in
+# the working directory):
+#modFile = "jags_model_mean.R"  # name of jags model code (inserted as arg in jags call)
+#####
+
+# Or, we can embed the model into a single script:
+# Save JAGS description of the model to working directory
+# sink() diverts R output to a specified connection
+sink("jags_model_mean.txt")	# write to file of specified name
+cat("
+    model {
+    
+    # Priors
+    population.mean ~ dunif(57,68)		    # Uniform w/min=57 and max=68
+    precision <- 1 / population.variance	# Precision = 1/variance
+    population.variance <- population.sd * population.sd
+    population.sd ~ dunif(3,5)          # Uniform over [3,5]
+    
+    # Likelihood                                  Model structure: normal distribution
+    for(i in 1:nobs){                           # Use observations to estimate
+    mass[i] ~ dnorm(population.mean, precision) # these population parameters
+    }                                           # jags requires precision (1/var)
+    }
+    ",fill=TRUE)  # fill argument governs line breaks
+sink() # this ends the diversion writing to a separate file
+
+#2.	Send to JAGS
+# Package all the stuff to be handed over to JAGS (data and # of obsns)
+# Bundle data; note that names must match names in model (mass, nobs)
+jags.data <- list(mass = data2$V1, nobs = length(data2$V1))
+
+# Function to generate random starting values. Not necessary for JAGS
+# except with some latent variables. Don't need it here.
+#inits <- function()
+#  list (population.mean = rnorm(1,600), population.sd = runif(1, 1, 30))
+# the list contains a random normal draw with a mean of 600 and sd=1
+# and a standard deviation initial value taken from a uniform [1, 30]
+
+# Parameters to be monitored (= to estimate).  These are the parameters
+# for which we want JAGS to save the posterior draws
+params <- c("population.mean", "population.sd", "population.variance")
+
+# MCMC settings
+nc <- 3		# Number of chains
+ni <- 4000		# Number of draws from posterior (for each chain)
+nb <- 2000		# Number of draws to discard as burn-in
+nt <- 10		# Thinning rate
+
+# Function jags() is called to perform the analysis in JAGS 
+# and put its results into an R object called out.
+
+# Start Gibbs sampler: Run model in JAGS and save results in object out
+# The following jags() call is for the embedded model (see model.file arg)
+#out1 <- jags(data = jags.data, inits = NULL, parameters.to.save = params, 
+#            model.file = "jags_model_mean.txt", n.thin = nt, n.chains = nc, n.burnin = nb, n.iter = ni)
+
+#save(out1, file="out1.RData")
+load("./out1.RData")
+#JAGS shows progress bar. 
+#"Plusses" indicate the burn in
+#Asterisks are the actual model run
+
+#3.	View Results
+
+
+# concatenated list combining all chains
+# how many elements in the posterior distribution for the mean?
+length(out1$sims.list$population.mean)
+
+#Look at trace plots for chains (one parameter at a time)
+par(mfrow=c(1,1))
+traceplot(out1)	# Activate the plot by hitting "Enter" or left click mouse
+			
+# Hit "Enter" or left click to advance to next trace plot
+
+# We can also produce graphical summaries, e.g., histograms of the posterior 
+# distributions for each parameter:
+hist(out1$sims.list$population.mean, col = "grey")
+hist(out1$sims.list$population.sd, col = "blue")
+hist(out1$sims.list$population.variance, col = "red")
+
+# Numerical summaries of the posterior distribution can also be obtained, 
+# with the standard deviation requested separately:
+summary(out1$sims.list$population.mean)
+summary(out1$sims.list$population.sd)
+sd(out$sims.list$population.mean)
+sd(out$sims.list$population.sd)
+
+
+```
+
+The estimated mean when using informative priors is 67.72 and the standar deviarion was of 4.166
+
+c) did the results you obtained in 1a and 1b differ? why or why not?
+
+4. You are interested in developing a method to prevent oak seedling mortality due to herbivore damage. After reviewing the literature, you select three treatments to apply: control(no treatment), fencing (the seedling is protected by a 1m high wire fence), and hot sauce application(the seedlings are treated systemically with hot sauce to discourage herbivores). You arbitrarily select 50 widely space forest plots out of a larger set o plots in which to conduct the experiment. In each plot, 30 seedlings are experimentally planted and divided evenly among the three treatments. you also count deer pellets along transects in the vicinity of each plot to serve as an index of deer activity near the plot. The index is scaled as a fraction of the maximum number of pellets (i.e., from 0 to 1) observed. After one year , you retunr to the plots and determine whih seedlings survive (y=1) or died (y=0) . The resultin data are contained in the file fence_deer.csv
+a) your committee recommends that you treat your plot as a random effect. Explain thair reasoning.
+
+
+Because you are not interested  specifibally in those 50 plots, you don't want to know the effect of them. What you really want to see more in a global scale if the enviroment (forest plot) have an effect in the survival of the seedlings rather than something specific  with site 1 or 2 etc. 
+
+
+
+
+

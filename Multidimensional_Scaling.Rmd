@@ -1,0 +1,271 @@
+---
+title: "Homework_4"
+author: "Diana Escamilla"
+date: "October 1, 2019"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+##installing packages
+library(vegan)
+library(MASS)
+```
+
+1) conduct a metric multidimensional scaling with k=2 for the amazon data matrix.
+  a) the stress 1 value for this solution is 0 (feel free to verify)
+    i) is this solution a good recreation of the original distance matrix explain
+```{r}
+#When you are working with disiimilarities for instance distance between two points as in this case is better to use mds metrics because they preserve the distances of the original matrix
+mat<- as.dist(read.table('HW_amazon-d.csv', sep=','))
+
+##multidimensional scaling metric
+mat.mds <- cmdscale(mat, k=2, eig=TRUE)
+
+##to calculate how well the set of data is represented by the model  like in this case we are trying to model the distances. One way to do that is by calculating stress which measures the differences between the actual distances and their predicted values. 
+##Heatmap
+##in r we can calculate it by using the shepard function 
+sh <- Shepard(mat,mat.mds$points)
+#names(sh)
+num <- sum((sh$y - sh$yf)^2) # sh$y is our dhi (observed distances); sh$yf is our dhihat (predicted distances)
+den <- sum(sh$y^2)
+Stress1 <- sqrt(num/den)	# compute Stress1
+Stress1
+
+
+```
+
+As mentioned previously we could corroborate that the stress1 for this solution is zero, which means that the scaling model is a perfect  representation of the original distance matrix. Stress1 measures the differences between the observed  and the predicted distances in the model and they are equal producing a stress value of zero. 
+
+  ii) Based on the information contained in the problem statement, could you have predicted this stress value without benefit of computing it?
+
+Yes, because the data we are trying to plot are straight-line euclidian distances which are determined by two variable(x and y coordinates) and in this multidimensional model we are displying them in a 2 dimensional space and therefore is a estress-free solution because we are taking up to the maximum of possible dimensions. 
+
+b)Plot the perceptual map in the 2MDs dimensions. Does this map retain the spatial dimensions of the original distance matrix? explaing
+
+
+```{r}
+## view  final coordinates (of 1st and 2d axes) for each politician
+plot(mat.mds$points, xlab = "X", ylab = "Y", main= 'map of black earth sites')
+points(mat.mds$points, pch=16, col='red')
+##there is perfect correspondence in this example using mds or nmds, the metric and non-metric method yield the same results.
+
+
+```
+
+Yes, because when you use metric multidimensional scaling it places each object into the N-dimensional space preserving the distances between objects as well as possible. Reason why when having dissimilarity matrices (with distances between two objects) is preferable to use metric MDS. Thus, this MDS map should retain the spatial dimensions of the original distance matrix.
+
+
+c) based on this map, can you revisit the sites studied by Dr. Peter?. 
+With just this map  you can not revisit them because you will need to identify the central point (0,0 coordinates) of the map and  the cardinal directions. 
+
+d) Invert MDS axis 2 and examine the map agian. Do you beleive, based solely on the map that there is any additional evidence to support Dr. Peter's hypothesis? Why or why not? 
+
+```{r}
+plot(x=mat.mds$points[,1],y=-1*mat.mds$points[,2], col='blue', 
+     cex=1.2, xlab="MDS Axis 1", ylab="MDS Axis 2",
+     main='map of black earth sites')
+
+```
+By inverting the axis 2 we can see that the distribution of the points resemblances a face,  which supported the hypothesis of Dr. Peter that the patches were created by an advanced agricultural civilization. They were capable of recreating this desing indicating they were not as primitive as the other archeologits thought. 
+
+
+2) data from 17 countries was collected
+```{r}
+dat<- read.csv('HW_societies_nohom.csv',header = T)
+library(tidyverse)
+dat<- column_to_rownames(dat, "Country")
+```
+a) Before conducting a nonmetric MDS, you need to create a distance matrix (using euclidian distances)
+ i) which  you use raw or standaridized values for varaibles when computing distances
+ 
+ I will use standadized values because the variables have different scales and if we do the analysis with raw data it will give a bigger weight in the analysis to the variables with the larger range. Thus, standarizing the data will equalize the data variability among variables. 
+ 
+ ii) compute the distance matrix
+ which two countries are more similar with regard to these variables and most dissimilar with regard to these variables
+```{r}
+# To put all variables on the same scale, standardize:
+dat.z <- scale(dat, center=TRUE, scale=TRUE)   # standardize data
+##obtaining the euclidian distances
+dz<-dist(dat.z, method = "euclidean") ##check the matrix to see which ones are the closest one
+##Euclidian distances matrix 
+dz.mat<- as.matrix(dz)
+##to check the similarity I decided to do a cluster analysis and plot the dendogram using the ward.D2 method
+d1 <- hclust(dz, method = 'ward.D2')
+plot(d1, hang=-1, main = "Dendogram of developed countries group based on societal attributes", sub = '', xlab = 'Country', ylab = 'Distance')
+```
+ 
+ Answer:
+Based on the dendogram and the Euclidian distances matrix, the pair of more similar countries with regard to the six societal attributes are New Zealand and Spain, followed by Switzerland and Austria. The most disimilar countries are  the United States and japan (based on the euclidian distances), but in general we can observed that the United states has low similiraty with the other countries as well.
+
+b) conduct a nonmetric MDS, with 2 dimmensions. Present a Shepard diagram and compute stress1.
+
+```{r}
+#non metric MDS for the distance matrix of the 6 variables 
+library(vegan)
+dat.nmds <- metaMDS(dz, k=2, trymax=50)
+#dat.nmds<- isoMDS(dz, k=2, maxit = 999)
+##shepard diagram for nmds
+sh <- Shepard(dz,dat.nmds$points)##extracting values to calculate stress
+stressplot(dat.nmds, main='Shepard Plot')
+
+##calculating stress
+num <- sum((sh$y - sh$yf)^2)
+den <- sum(sh$y^2)
+Stress1 <- sqrt(num/den)	# compute Stress1
+Stress1
+```
+The stress of the non metric multidimensional model is close to 0, which means that the resulted map in two dimensions is a good representation of the relationships between countries based on the 6 societal attributes. In addition, the shepard diagram evaluated how well the configuration obtained by the non-metric MDS matches the original data patterns. A high R2 (0.9), which is the correlation between ordination values and ordination values predicted indicate the nm-MDS model has a good fit to the observed distances. Thus, we could conclude that the non-metric multidimensional scaling model in 2 dimensions is a good representation of the original distances between countries based on the 6 societal variables.  
+
+ 
+ c) plot the countries in 2-dimensional NMDS space. Use the envfit() function to add vectors of the covariates, thereby creating a biplot
+ 
+```{r}
+
+fit<- envfit(dat.nmds, dat, perm= 1000)
+scores(fit, "vectors")
+plot(dat.nmds, type = "t", xlab="NMDS Axis 1", ylab="NMDS Axis 2",
+     main='Map of countries relationship based on societal attributes')
+plot(fit)
+plot(fit, p.max = 0.05, col = "red")
+
+
+```
+ 
+ d) offer interpretations of NMDS space Axis 1 and Axis 2. Explain the basis of the interpretation
+ 
+By observing the previous plot we can see the 6 environmental variables over laying on the ordination space. For the Axis 1 we can observe that religiosity (secularism), acceptance of theory of evolution and income inequality align predominatly on Axis 1. By plotting the raw data in 3 dimension plot for the three variables that domain the axis 1, we can observe congruency with the distribution of the countries in the NMDS plot. The main interpretation is that countries with higher income inequality have also high secularism and a low acceptability of the theory of evolution and countries with lower income inequality are more religious and accept in greater percentage the theory of evolution. 
+ 
+```{r}
+test<-dat[,c(1,2,5)] 
+library(scatterplot3d)
+s3d<- scatterplot3d(test, color=1:17, pch=19, type="p")
+s3d.coords <- s3d$xyz.convert(test)
+text(s3d.coords$x, s3d.coords$y, labels=row.names(test), cex=0.7, pos=4)
+
+
+```
+ 
+For axis NMDS 2, we have the variables footprint, income per capita and average hours worked per year aligning predominantly on axis 2. The direction of the variable vectors indicate that countries with higher income percapita have also a higher explotaition of resources and work less hours per year. While countries with lower income percapita, work more hours per year and have a lower explotation of resources.By looking at the 3d plot of the three mentioned variables we can observe that the interpretations are congruent with the distribution exposed in the nm-MDS plot.
+ 
+ 
+```{r}
+test<-dat[,c(3,6,4)] 
+library(scatterplot3d)
+s3d<- scatterplot3d(test, color=1:17, pch=19, type="p")
+s3d.coords <- s3d$xyz.convert(test)
+text(s3d.coords$x, s3d.coords$y, labels=row.names(test), cex=0.7, pos=4)
+```
+ 3) wetlands study. File name HW_salamander.csv
+ 
+```{r}
+dat.sal<- read.csv("./HW_salamander.csv")
+```
+ 
+ a) you want to predict the probability of ocurrence of the salamander species' egg masses as a function of one or both of the explanatory variables you measured
+ 
+ i) which of the following generalized linear modeling frameworks (Gussian, logistic, Poisson, ordinal) is more appropriate for this problem.
+ 
+The response variable for this study is presence of egg masses evaluated as occurance (1) and non ocurrence of egg masses(0) at the ponds. Therefore, the most appropriate framework is the logistic, which explains the relationship between one dependent binary variable and one or more independent variables that can be continuous, discrete, or both.
+
+ii) Whick link function (identity, logit, log, hazard) is more appropriate
+The logit link function is the most appropriate for binary logistic regression. In this case, the logit function will take the linear combination of the explanatory variables and convert those values to the scale of probability, which guarantees that the probability of ocurrance of egg masses is bounded by 0 and 1. 
+
+b) Model the probability of ocurrence of the salamander egg masses in ponds as a function of dissolved oxygen (use raw values no standardized)
+```{r}
+##running only one explanatory variable at the time
+Out<- glm(y ~do, family = binomial,data = dat.sal)
+##looking atht he model
+summary(Out)
+
+##exp beta(do)
+exp(0.8794*2)
+
+##testing the deviance of the model compare with the null model
+Out$null.deviance - Out$deviance
+# The degrees of freedom for the difference between the two models is equal to
+# the number of predictor variables in the model, and can be obtained using:
+Out$df.null - Out$df.residual
+# Finally, the test statistic can be obtained using:
+pchisq(Out$null.deviance - Out$deviance, Out$df.null - Out$df.residual, lower.tail=FALSE)
+
+```
+ 
+ i) is the relationship significant
+ 
+ Yes, according with the summary of the logistic regression output we have that the parameter dissolved oxygen has a significant relationship with the response variable. The r package 'GLM' uses the Wald inference to test the parameters; where, the null hypothesis is Bj=0. The p-value for the test for disolve oxygen (do) coefficient is 0.00262 thus the null hypothesis is rejected suggesting that there is a relationship between the response and disolve oxygen (do) variable.  We can also observe that compare with the null model the deviance is reduced by 55, and with a p-vallue of 1.007e-13 for the chi-square test I can conclude that disolved oxygen is an informative predictor for the model.
+ 
+ ii) does dissolve oxygen increase or decrease the probability of egg masses
+ According with the analysis the coefficient for the variable do is 0.8794 and is positive. Indicating that for 1 unit increase of dissolve oxygen in a pond the log-odds of finding egg masses increases by 0.8794
+ 
+ iii) Explain the meaning of the coefficient for dissolved oxygen in the model, using the concept of odds. 
+ In terms of probability, we have that the odds (probability of ocurrance) of egg masses increases by a factor of exp(0.8794)(2)= 5.805467 when there is a 2-fold change in dissolve oxygen. Thus, higher dissolve oxygen increases the probability of finding breeding activity of the studied pod salamander.
+ 
+ c) model the probability of ocurrence of salamander egg masses in ponds as a function of dissolved oxygen and pond perimeter. Does the additional variable (pond perimeter) add significantly to the explanatory power of the model containing only dissolved oxygen
+ 
+```{r}
+##running both explanatory variable at the time
+Out1<- glm(y ~do+perimeter, family = binomial,data = dat.sal)
+
+###Anova does the deviance test for all variables doing a sequencial drop
+library(car)
+Anova(Out1)
+
+```
+ 
+ According with the chi-square test we have that the model with only dissolve oxygen(do) as explanatory variable and the model with do and pond perimeter doesn't differ significantly based on the deviance test. Thus, the pond perimeter doesn't contribute significantly to the model and we don't need to use it as explanatory variable. Therefore, the best model is the model using dissolve oxygen as explanatory variable.
+ 
+ d. Using the best model, conduct a Hosmer-Lemeshow test of model goddness of fit. Explain your result
+```{r}
+# Hosmer-Lemeshow g.o.f. test
+library(ResourceSelection)
+hoslem.test(dat.sal$y , fitted(Out))
+```
+ 
+ According with the Hosmer Lemeshow test with a p-value of 1 (much larger than 0.05), which indicates that the model is a good fit. This test is just telling us how well the data fits the model. So, we could say that the model using dissolve oxygen as a explanatory variable is good model to describe the presence of egg masses on ponds. 
+ 
+ 
+ e. Plot a curve of predicted probability of ocurrence against dissolved oxygen( i.e., on the response scale). Include in the plot the observed/absence data. Does there seen to be a threshold of dissolved oxygen bewlow which occurrence of egg masses drops precipitously? if so, at what level does this occur?
+ 
+```{r}
+#      predict() returns a $fit list and a $se.fit list
+pred <- predict.glm(Out, type="response", se.fit=TRUE) # Note argument specifying response scale
+
+##ploting a curve of dissolved oxygen
+
+plot(x=dat.sal$do, y=pred$fit, type="p", cex=1.5, xlab="Dissolved Oxygen", 
+     ylab="Fitted Probability of Egg Masses Ocurrences", ylim=c(0,1))
+##adding the observed/absence data
+points(x=dat.sal$do, y= dat.sal$y, col="red", pch=19, cex=1)
+
+```
+ Yes, in the graph we can observe a drop in the probability of egg masses below 10. 
+ 
+ f) Examine residuals using the DHARMa package. What do you conclude regarding 
+```{r}
+library(DHARMa)
+##calculating the residuals
+set.seed(4)
+sout <- simulateResiduals(Out, n=250)
+plot(sout)
+```
+ 
+ The exploration of residuals with DHARMa basically show us how is the distribution of the residuals and if a model is correctly specify the residuals should be unifomly distributed. The qq-plot checks the uniformity of residuals and detect the deviations from the expected distribution where a straigth 1 by 1 line indicates an overal uniform distribution of the residuals. for the evaluated model (y~do with y=egg masses and do= dissolve oxygen) we can see some slightly departures from the straight line but in general terms we could say that the distribution of the residuals is uniform, this is corroborated by th ks test (uniformity test) which p-value was 0.507 which indicates that the residuals are uniform. The residuals vs predicted plot on the left shows if there are deviations from linerarity in the residuals and/or outliers, for this model we don't see any outlier and for the first two quantiles we see sligtly deviations from linearity. The presence of patterns could indicate that there are missing covariates in the model. However,there is not a strong pattern in the residuals that indicates a big problem in the model. I also think that some deviations are still okay because there is not a perfect model and how we just have one explanatory variable there may be information on the response variable (egg masses) that can't be completely explain by dissolve oxygen and adding other varaibles in the model could certainly improved the model if the prediction accuracy is not good. However, as overall conclusion and looking to the qq-plot and residual vs predicted plot I could say that the specifications of the model are good because there are not strong patterns in the residuals and they are fairly uniform. 
+ 
+ g) plot a receiver operating characterisctic curve for the best model, and report the area under the curve. Baased on this result do you consider the model accuracy to be poor, satisfactory, or excellent?
+ 
+```{r}
+# ROC curves
+library(ROCR)
+pred <- prediction(Out$fitted,dat.sal$y) # provide fitted values from glm, and response
+perf <- performance(pred,"tpr","fpr")  # true and false positive fractions
+plot(perf)
+abline(a=0,b=1)
+performance(pred,"auc")
+
+performance
+
+```
+ 
+ We can observed that the area under the curve is of 0.9771595 so we could say that the model has a high accuracy predicting egg masses based on the disolve oxygen in the ponds. So we could say that dissolve oxygen has a significant relationship with egg masses and also have a large effect on egg masses, which makes this model a good model for predicting the breeding activity of a pond-breeding salamander.

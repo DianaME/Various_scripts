@@ -1,0 +1,182 @@
+---
+title: "Homework_6"
+author: "Diana Escamilla"
+date: "December 5, 2019"
+output: word_document
+---
+1. A study was conducted with female Atlantic salmon to determine the effect of radiation
+level and body length on total egg mass produced. Full-sib females of the same age were
+randomly assigned to each of 3 different levels of radiation (levels 1, 2, and 3). Each group
+consisted of 5 female salmon.
+
+a. Present a design matrix for an effects parameterization to conduct ANCOVA with
+additive effects of radiation and body size. For full credit, make sure to show how
+you would specify this parameterization in R. If it helps, feel free to make up
+some "fake" data to use in R. 3 points.
+
+For effects parameterization I will have an incidence matrix with the radiation effect presented in columns 2 and 3 and the body.lenght effect in column 4. The way of how to define it can be seing in the next code. 
+
+```{r}
+##Data generation
+##egg mass produced by female salmon as a function of radiation level and body length
+n.sample<- 5 ##each group consisted of 5 salmon females
+n.radlev<- 3
+n<- n.sample*n.radlev
+x<- rep(1:n.radlev, rep(n.sample, n.radlev))##indicator for treatment level population
+rad.trt<- factor(x, labels= c("1", "2", "3"))
+set.seed(1)
+body.length<- runif(n,20, 60) ##observations of body lenght between 20 to 60
+
+###building the desing matrix for effects parameterization to conduct ancova 
+Xmat<- model.matrix(~rad.trt+ body.length)
+print(Xmat) 
+
+
+```
+
+b. Same as 1.a., except for a means parameterization. 3 points.
+The means parameterization will have one column for each radiation treatment and on for body length. The way of specifying it can be found next.
+
+```{r}
+
+Xmat1 <- as.matrix(model.matrix(~ rad.trt-1 + body.length)) # Create design matrix
+Xmat1	
+
+```
+
+c. Present a design matrix for a means parameterization to conduct a fully interactive
+ANCOVA. Show how you would specify this parameterization in R. 4 points.
+ 
+ This design matrix contatins additional columns that represents the products of the clumns that stand for the main effects. The way of specifying this model is found next:
+
+```{r}
+###building the desing matrix for means parameterization for a full interactive model 
+Xmat2<- model.matrix(~ rad.trt *body.length-1)
+Xmat2
+```
+2. A population of southern flying squirrels was sampled to obtain abundance estimates.
+Livetraps were set for 5 consecutive nights (assume population closure). Captured flying
+squirrels were marked for individual recognition and released. In addition, the amount of
+rainfall each night was measured. The resulting encounter history data are contained in
+the file 'EH_sfs.csv'. Standardized rainfall estimates for each of the five nights are
+contained in the file 'rain_sfs.csv'.
+
+a. Fit the closed population model in a Bayesian framework using a data augmentation
+approach in JAGS. Include rain as a predictor variable on probability of detection (p)
+in each trapping occasion. Give a summary of your results including the estimated N,
+the inclusion probability for data augmentation (omega), and the slope (i.e., effect of
+rain) and intercept contained in the linear predictor for p. 7 points.
+
+```{r}
+data<- read.csv("./EH_sfs.csv")
+rain<- as.vector(read.csv("./rain_sfs.csv"))
+rain<- rain$x
+
+#########################################################
+#  Analysis in JAGS using data augmentation ("Voodoo"?) #
+#########################################################
+
+# Data Augmentation for the data set created here.
+nz <- 200  # augmentation rows
+samp.night<- 5
+# Add to the C observed individuals 100 rows of "potential individuals"
+yaug <- rbind(data, array(0, dim=c(nz, samp.night))) # add 100 "uncaptured" individuals
+yaug  # augmented encounter history matrix
+
+#rain1<- rep(rain$x[1], nrow(yaug))
+#rain2<- rep(rain$x[2], nrow(yaug))
+#rain3<- rep(rain$x[3], nrow(yaug))
+#rain4<- rep(rain$x[4], nrow(yaug))
+#rain5<- rep(rain$x[5], nrow(yaug))
+#rain<- rbind(rain1, rain2,rain3, rain4, rain5)
+# Define model
+library(jagsUI)
+sink("mrr_jags.txt")
+cat("
+model {
+
+# Priors
+omega ~ dunif(0,1)  # inclusion probability = pr(inclusion) of EH row to N
+alpha0 ~ dnorm(0, 0.01) ##parameter for rain as an effect  
+alpha1 ~ dnorm(0, 0.01) ##coefficient for fixed effects
+
+for (j in 1:T){
+##logit linear model for detection: using rain as a predictor varaible
+logit(p[j])<- alpha0 + alpha1*rain[j]  
+}
+
+# Likelihood
+for (i in 1:M){        # M = number of rows of augmented y matrix
+                          #     so treating unobserved individuals as data too
+   z[i] ~ dbern(omega) # Inclusion indicators for each row
+   
+  #For each individual (detected or not) loop over each sampling occasion
+   for (j in 1:T){
+      yaug[i,j] ~ dbern(p.eff[i,j])
+      p.eff[i,j] <- z[i] * p[j] # Can only be detected if z=1 (but can be 1 for augmented
+      } #j=sample occasion      row depending on coin flip with prob of omega
+   } #i=row (observed or augmented)
+
+# Derived quantities
+N <- sum(z[]) # sum of number of rows with z=1 is estimate of N
+}
+",fill = TRUE)
+sink()
+
+
+# Bundle data
+jags.data <- list(yaug = yaug, M = nrow(yaug), T = ncol(yaug), rain=rain)
+
+# initial values - need initial values because we have a latent variable z
+#inits <- function() list(z = rep(1, nrow(yaug), p = runif(1, 0, 1)))
+inits <- function() list(z = rep(1, nrow(yaug)))
+
+# Define parameters to be monitored
+params <- c("N", "p", "omega", "z", "alpha0", "alpha1")  # include z to get a sense of this latent variable
+
+# MCMC settings
+ni <- 20000
+nt <- 5
+nb <- 10000
+nc <- 3
+
+# Call jags from R and store in object "out"
+#out.M0 <- jags(data=jags.data, inits=inits, parameters.to.save=params, 
+#            model.file="mrr_jags.txt", n.chains=nc, n.thin=nt, n.iter=ni, n.burnin=nb)
+
+#save(out.M0, file= "model.RData") # i saved and loaded it again to make easier kniting the document in Rmarkdown
+load("./model.RData")
+
+
+# Inspect output. Note latent states z for detected individuals are always 1
+out.M0
+
+
+# Plot posterior distribution for N under model M0:
+hist(out.M0$sims.list$N, xlim= c(80, 180), breaks = 10, col = "grey")
+
+
+
+```
+The estimate value for probability of detection were 0.16, 0.18, 0.79, 0.03 and 0.03 for night 1, 2,3,4, and 5 respectively.The estimated mean for N (amount of detection) was 124.8, the omega estimate was 0.406 and the slope was -2.440 and the intercept for rain as a llinear predictor of detection probability  was -2.734 
+
+
+b) what do you conclude about the effect of rain on detection probability 
+
+We have that the rain have a negative effect on detection probability and 1 unit increase in rain will reduce detection probability in a factor of exp(-2.4)=  0.09. It make sense that rain reduces the detection probability in squirrels. Rain may make the squirresl to be less active and have less chances of getting caught by a live trap. 
+
+
+c. Present a histogram plot of the posterior distribution of N. How many "ghost"
+individuals did you add to your augmented dataset? Was it enough? How do you
+know? 4 points.
+
+I augmented the dataset in 200 (ghost individuals) and it was enough the way of telling this is by the shape of the posterior distribution of  N. When it is not enough your histogram will look interrupted. 
+
+
+
+
+
+
+
+
+

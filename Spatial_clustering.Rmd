@@ -1,0 +1,336 @@
+---
+title: "Untitled"
+author: "Diana Escamilla"
+date: "September 18, 2019"
+output: word_document
+---
+
+1) Abundance of two species of trees were recorde in each of 300 5x5 m plots. The plots were arrange in a 30x10 array and coordinates of plot centers was recorded along with species abundance. These data are found in "HW_spatial_clusters"
+
+a) create a bivairiate scatterplot of plot locations and color points according to the abundance of species 1 and repeat to create a similar plot for species 2 
+```{r}
+Data<- read.csv("./HW_spatial_cluster.csv", header = T)
+head(Data)
+Data[1:4]<-  lapply(Data[1:4], as.numeric)
+
+##crating a bivariate plot 
+library(ggplot2)
+
+Plot1<- ggplot(Data, aes(x,y))+ geom_point(aes(colour= sp1), size= 4)+
+scale_colour_gradient(low = "blue", high = "orange")
+
+Plot1
+
+Plot2<- ggplot(Data, aes(x,y))+ geom_point(aes(colour= sp2), size= 4)+
+scale_colour_gradient(low = "blue", high = "orange")
+
+Plot2
+
+```
+
+b) Conduct spatial clustering and choose the number of clusters to use by
+i) Visually inspectig the resulting dendogram
+
+```{r}
+#subsetting data for doing spatial clustering
+dat<- Data[,1:2] ##is an nxp dataframe where p or parameters are the abundance of specie1 and specie 2
+De<- dist(dat) ## the distance are 
+n<- nrow(dat) ##number of plots
+
+##runniing spatial clustering 
+library(ClustGeo)
+library(clusterCrit)
+tree1 <- hclustgeo(D0=De, D1=NULL, alpha=0, wt=rep(1/n,n)) 
+plot(tree1, main= "Dendogram of spatial clustering", sub='', ylab= "Distance")
+abline(h=4, col="red")
+
+```
+Inspecting the data visually I would think that there are four main clusters. And we also can observed that from left to right cluster 1 and 2 are closer to each other than to cluster 3 and four. Similarly cluster 3 and 4 are closer to each other than to cluster 1 and 2. 
+
+ii) using Ball-Hall and Calinski-Harabasz metrics
+
+```{r}
+x<- as.matrix(dat)
+t <- matrix(data=NA, nrow=15, ncol=2)
+for (k in 1:15) {
+  p <- cutree(hclust(d=De, method="ward.D2"), k)
+  temp <- intCriteria(x,p,c("Ball_Hall", "Calinski_Harabasz"))
+  t[k,1] <- temp$ball_hall
+  t[k,2] <- temp$calinski_harabasz
+}
+plot(t[,1], xlab="Clusters", ylab="Ball-Hall")
+points(seq(1,15,1), t[,1], pch=16)
+plot(x=seq(1,15,1), y=t[,2], pch=1, xlab="Clusters", ylab="Calinski-Harabasz")
+points(seq(1,15,1), t[,2], pch=16)
+
+```
+
+Based on Ball-Hall and Calinski-Harabasz metrics I would also suggest to use 4 clusters, according with the metrics with 4 clusters we reduced the sum of squares withing each group in a significant amount compare with 2 clusters. After 4 clusterse also don't see any other significant reduction in the variation within groups. 
+
+c) plot the spatial clustering solution for your chosen K. How does it compare to the mamps of species abundance. 
+
+```{r}
+tree1 <- hclustgeo(D0=De, D1=NULL, alpha=0, wt=rep(1/n,n))
+plot(tree1, hang=-1, label=FALSE, xlab="", sub="", main="")
+# The plots seem to  be cluster into 4 groups:
+rect.hclust(tree1, k=4, border=c(1:4)) # draw rectangles around clusters
+legend("top", legend=paste("cluster", 1:4), fill=1:4, bty="n",
+       border="white")
+
+P4 <- cutree(tree1, 4)#saving the results of the clustering by storing it in a vector 
+
+##plot a map using the new cluster group information instead of species 
+map<-Data[,3:4]
+map<- cbind(map, P4)
+
+##ploting the group with color and ggplot
+
+Plot2<- ggplot(map, aes(x,y))+ geom_point(aes(colour= P4), size= 4)+
+scale_colour_gradient(low = "blue", high = "orange")
+
+Plot2
+
+
+```
+ We can observe in the map of plots with the assing cluster as groupin factor that the field is split in four vertical areas where in each area the abundance of the sp1 and sp2 are similar. When comparing this information with the maps of abundance plotted in the first point we have that the abundance of sp1 increases from left to rigth in the fiel and for sp2 its abundance increases from the bottom to the top of the field. The map with the clusters has patters more similar to the distribution of sp1. The reason for this it is because the variation in the abundance of sp1 (0 to 29) is much higher than the variation in sp2 (0 to 12).  
+ 
+d) Conduct spatial clusterin with a partial contiguity constraint.
+i) Determine the choice of the mixing parameter (to the nearest 0.1) that constrains losses in homogeneiity to 5% of maximum for  the envrionmental (species abundance) disimilarity matrix. How much loss in homogenetiy occurs at this alpha for the geographic disssimilarity matrix? 
+
+```{r}
+#we have that:
+#D0 = De = Euclidean distance matrix between the n cities using
+#           the 2 environmental variables - species abundance
+# D1 = Ds = Dissimilarity matrix that takes geographical proximity into
+#           account for the n cities
+## De was calculated previously 
+##now we have to set the disimilarrity matrix based on geographic distances
+## previously i subset the coordinate data as map
+
+map1<- map[,1:2]
+#a<- dist(map1)
+##calculate the geographical distance
+library(geodist)
+Geo.Dist<- geodist(map1) ##this is giving me an nxn matrix withh geographic distance between points calculated using the geodist function in r
+Ds<- as.dist(Geo.Dist)
+
+n<- nrow(dat)
+
+##now for the analysis we are going to include the geographical distance constratin
+#we are going to use the choice alpha function to compute and plot homogeneity (q0 and q1)
+##I am using values of alpha from 0 to 1 each 0.1.  and the k found previously was 5
+cr <- choicealpha(De, Ds, range.alpha=seq(0,1, 0.1), K=4, graph=TRUE)
+
+cr$Q
+
+cr$Qnorm
+
+```
+According with the plot  the  alpha where we can keep the higher homogeneity of either environmental (D0) and spatial  constratins is alpha of 0.2. Where the losses in homogeneity for the environmental component compare with the maximum are of 0.5%
+
+ii) Plot the spatial clustering solution from 1.d.i how does it compare to the aspatial solution
+
+```{r}
+tree.2 <- hclustgeo(De, Ds, alpha=0.2)
+P4bis <- cutree(tree.2, 4)
+
+##plot a map using the new cluster group information instead of species 
+map2<- cbind(map1, P4bis)
+
+##ploting the group with color and ggplot
+
+Plot3<- ggplot(map2, aes(x,y))+ geom_point(aes(colour= P4bis), size= 4)+
+scale_colour_gradient(low = "blue", high = "orange")
+
+Plot3
+
+
+```
+
+In the map we can observed a similar distribution of the four clsuters with some slightly changes in the limits of each cluster group. We can see more define blocks. However we still ahve some plots from one cluster that are mixed with other cluster group like the 6 points group in the (x=5,y=10) left center side of the plot. 
+
+2) Researchers collected a large historical data set of wolf skull measurrements from across North America. 15 cranial measurements were recorded fro 289 speimens. Se was also recorded. The measurements are depicted in the attached figure. The data are stored in file HW_GrayWOlves.csv
+
+a) conduct principal component analysis on these 15 cranial variables, after standadization. Use singular value decomposition and present the first 5 eigenvalues and eigenvectors
+
+
+```{r}
+data.2<- read.csv("./HW_GrayWolves.csv")
+data.2$Sex<- as.numeric(as.factor(data.2$Sex))
+
+### Singular value decomposition with prcomp() 
+PCs <- prcomp(data.2, center = TRUE, scale = TRUE)	 # done with correlation matrix
+#the sd's are the sqrts of eigenvalues
+a<- PCs$sdev[1:5]
+eigenvalues<- a^2
+eigenvalues
+
+##gettint the eigenvectors
+PCs$rotation [,1:5]
+
+
+```
+
+b) What proportion of the total variation in the original 15 cranial varialbes is explained by the first principal component. 
+
+```{r}
+##calculating the variation explained for the first component
+b<- PCs$sdev
+eig.val<- b^2
+totalvariation= sum(eig.val) ##calculating the total variation
+#calculating the proportion of variance explain by the first eigenvalue
+(eig.val[1]*100)/totalvariation
+
+```
+
+Thus, the proportion of variation explained by the first principal component is 66%.
+
+c) Does the first principal component expleain a sufficient amount of variation to justify the use of PCA.
+
+The variance explain for the firs component is high and this justify the use of principal component analysis. This means we were able to reduce the dimensionality of our dataset (15 variables) to few components (linear combinations of the original varialbes) that will explain the majority of the variation in our dataset, which is the final purpose of PCA. Reduce dimensionality by takin highly correlated variables and converting them into uncorrelated linear combination of the original variables. So, with just onoe component explaining more than half of the variation so I think we have got what we wanted. 
+
+d) Plot PC1 and Pc2 scores of wolves, and lable each point by the wolf's sex. Is there any evidence of segregation due to sex along either axis? How might you test for an effect of sex? 
+```{r}
+#plotting the socres of wolves for the frist tow components
+group<- as.factor(data.2$Sex) ## 1  and 2 are the indicators for either sex. I am assuming 1 is female and 2 is male
+library(factoextra)
+fviz_pca_ind(PCs,
+             col.ind = group, # color by groups
+             palette = c("#00AFBB",  "#FC4E07"),
+             legend.title = "Groups",
+             repel = F
+             )
+
+```
+
+By observing to the biplot graph of PCA showing the individuals and gropu by sex. We have points in blue represent wolfs of one sex and points in orange represent wolfs of the other sex. Yes, we can observe that along the axis of the principal component 1 that explains 66% of the variation there is a separation of the individuals in two gropus on sex is group to left side and the other group is separated to the right side. One way could be to do a Discriminat analysis as we saw in class is a good method when we have known groups in the population (like in this class we can observed that they could be divided in two groups giving the sex). We could model better the differences between sex group using LDA because PCA doesn't take into account any difference in gropus.
+
+e) The researchers offered the following meaning for the principal components. Base on your understanding of PCA and its assumptions, and your inspection of PC1, PC2 and PC3, do you agree? Explain your answer
+
+```{r}
+##extracting the eigenvectors
+PCs$rotation[,1:3] # eigenvectors tell us about the weight of each variable into the variation 
+```
+
+i PC1: A measure of skull size --> I think the first principal component all variables have similar positive weights. And all these variables measure different variables from the wolf's skull so we could agree that this principal component is describing the size of the skull
+
+ii PC2: A measure of tooth size against the remainder of the skull
+we can observe in PC2 that there is a constrant between tooth measurement variables (positive eigenvectors) with the other skull measurements that have negative eigenvectors. So, I agree with the statemnt made by researchers where this pC2 measures the tooth size in contras to the rest of the skull. we cab aksi ibserved that the eigenvector values are 
+
+iii PC3: A measure of size of the frontal brain and teeth, relative to the rest of the skull
+In the case of the third PC3  what I found is that there is acontrast between sex and the post orbital constriction. So I don't think that PC3 is a measure of the frontal brain and teeth.
+
+3. A study of Maine lobsters was conducted. For 200 lobsters, biologist measured total lenght of the right (x1) pincer claw and maximum carapace breadth (x2). The first 100 lobsters were collected in 1962, and the 2nd 100 lobsters were collected in 2002, a period over which fishing pressure changed dramatically. The data are in HW_lobster200.csv
+
+a conduct a MANOVA using wilk's lambda to test wheter there is significant variation between two groups of lobsters (1962,2002). Explain your results.
+
+```{r}
+data.3<- read.csv("./HW_lobster200.csv")
+x<- as.matrix(data.3[,2:3])
+group<- data.3[,1]
+fit <- manova(x ~ group) ##use the wilk's lambda to test
+summary(fit, test= "Wilks")
+
+```
+
+According with the results we can observed that we have a very low p-value which is highlly significant. Thus we reject the null hypothesis (equality of population mean vectors) and conclude that there are significant differences in the total lenght of the right pincer claw and macimum carapace breadth of the lobster from 1962 and 2002.
+
+
+b. Conduct a test of multivariate normality for each group, and share your conclusions
+
+```{r}
+library("MVN")
+##we first check normality for each group first 
+out <- mvn(data=x[which(group==1),], mvnTest="mardia")
+out
+out1 <- mvn(data=x[which(group==2),], mvnTest="mardia")
+out1 # Mardia's test is based on multivariate skewness and kurtosis (2 tests)
+
+out <- mvn(data=x, mvnTest="hz", multivariatePlot = "qq")
+out # Henze-Zirkler's test is based on the distance between a (null)
+# multivariate normal and the observed CDF.
+# The Q-Q plot (quantile-quantile) plots the quantiles of probability
+# distributions for the theoretical Chi square and for 
+# the observed squared Mahalanobis distances.
+out <- mvn(data=x, mvnTest="royston")
+out # Royston's MVN test uses the 
+
+#mvn(data=Y, mvnTest="hz", 
+    #univariatePlot="histogram",multivariatePlot = "qq")
+```
+
+We could observe according with the tests for normality within each group that there is normal distribution of the data within each group. Then we run other tests and found multivariate normality using the royston test which uses shapiro wilk statistic. Across all test we didn't observe normality for variable 1. However as we obsrved normality withing groups and multivariate normality across test. My conclusion is that the dataset fulfill the assumption of normality
+
+c) conduct a test of equality of withing gropu variance covariance matrices  and share your conclustion
+
+```{r}
+library(asbio)
+Kullback(x, as.factor(group))  # arguments are data matrix and grouping vector
+
+
+```
+
+The kullback test shows that there is equality of variance withing groups
+
+d) conduct a linear discriminat analysis and report the percentage of lobsters classified correctly into their gropus 
+
+
+```{r}
+data.3<- read.csv("./HW_lobster200.csv")
+x<- as.matrix(data.3[,2:3])
+group<- data.3[,1]
+
+##computing the linear discriminat analysis
+library(MASS)
+discrim <- lda(x=x, grouping=group, CV=TRUE)
+#discrim[ ]
+
+# Compute classification accuracy
+bad <- which(group!=discrim$class) # misclassifications (row numbers)
+discrim$posterior[bad]
+x[bad,]
+length(bad) / nrow(x)  # fraction of misclassifications (21/200)
+(nrow(x) - length(bad)) / nrow(x) # fraction correct (7/7)
+
+
+
+
+```
+According with the results we have that about 10% of the lobsters were missclassified. And the other 90% was classified correctly.
+
+e) Plot the discriminant function scores for the lobsters, labele by group membership, along with the mean score for each group. It is ok to provide a scatterplote that uses the lobster row index on the x axis or use histograms. 
+```{r}
+library(MASS)
+discrim1 <- lda(x=x, grouping=group, CV=F)
+#discrim[ ]
+
+# Now we can compute the positions of the objects in 
+# canonical space using the discriminant functions.
+# This requires centering the raw data on the means.
+X.c <- scale(x,center=TRUE,scale=FALSE)
+C <- discrim1$scaling	# The normalized eigenvectors are in C
+F = X.c %*% C		# As described in section IV C, the matrix F contains 	# the canonical variates
+
+##centroid raw data
+Centroids <- matrix(data=1,nrow=2,ncol=2)
+Centroids[1, ] <- colMeans(X.c[group==1, ])	# centroid for group 1
+Centroids[2, ] <- colMeans(X.c[group==2, ])  # centroid for group 2
+ 
+#
+Centroids			# These are the group centroids from raw (centered) data
+#
+Fbar <- Centroids %*% C	 # (g x p)(p x (g-1)) = g x (g-1)
+Fbar
+
+
+##plotting the the discriminant function scores
+plot(F, main='LDA',xlab='Canonical Axis 1', ylab='Canonical Axis 2', col= as.integer(group))
+abline(h=0, col='grey', lty=2);abline(v=100, col='grey', lty=2)
+points(Fbar, pch=19, col="green")
+text(F, labels=group, cex= 1, font=3, col=group)
+
+
+
+```
+f) Interpret your results biologically based on the information provided in the problem 
+What we can see in this plot is a clear separation between the two groups (lobsters from 1962 and lobster from 2002). That means that using the linear combination obtained by the linear discriminant analysis we will have to be able to classify this lobster according with the year they were collected. This also indicates that there are differences in the lenght of the pincer claw and maximum carapace breadth of the lobsters from 1962 and 2002, and this changes may have been provocated by the high fishing pressure favoring surviving of certain individual that then differentiate into a lobster with different dimensions. 

@@ -1,0 +1,333 @@
+---
+title: "Clusters"
+author: "Diana Escamilla"
+date: "September 3, 2019"
+output: word_document
+---
+
+1. Given the data matrix X
+
+a) compute by hand the matrix containing the sum of squares and cross-products of X
+
+
+
+b) compute the matrix, Z, of standardized values of X. Use column means. You may do this by hand or using r
+```{r}
+X<- matrix(c(4,1,3,5,1,7),ncol=2)
+x.bar<- colMeans(X)
+Xc<- t(t(X)-x.bar) ##center data
+
+##then we calculate the variance
+S <- (1/(nrow(X)-1))*(t(Xc)%*%Xc)		# S = (1/n-1)Xc'Xc
+S ##first output is the variance covariance matrix
+#to calculate the standardized multivariate data, we must first define D(1/s), 
+I <- diag(x=1, nrow=2, ncol=2)
+D <- S*I				# extract the variances from S (sd^2)
+D[D!=0] <- 1/sqrt(D[D!=0]) 	# To get D(1/s), change the diagonals to 1/std dev.
+
+##thus the standardized multivariate data is
+Z<- Xc%*%D
+
+colMeans(Z) ##second output is the mean of the two standardized variables
+
+sd(Z[,1]); sd(Z[,2]) ##third and four output are the standard deviation of the two standardized variables
+```
+c) Compute S and R, the variance - covariance matrix of X and the correlation matrix of X respectively
+```{r}
+##I calculated the S (variance-covariance) matrix previoulsy
+S <- (1/(nrow(X)-1))*(t(Xc)%*%Xc)		# S = (1/n-1)Xc'Xc
+S
+
+R <- D %*% S %*% D		# formula for correlation matrix R
+R
+
+```
+
+d) Explain the meaning of each  of the elements of S and R from 1c
+For the variance-covariance matrix "S": the diagonal elements correspond to the variances of the different variables. In this example we have two variables so we have a 2x2 matrix with two elements in the diagonal.  We have a variance of 2.33 and 9.33 for variable 1 and 2, respectively. The variance just tell us what are the square deviation of the data from its mean. 
+
+The off-diagonal elements correspond to the covariance between each two variable pairs. The covariance is the product of the devaition of two varaibles from their respective means. Covariance just tell us how much two variables vary together. 
+
+The variance is calculated as the sum of the square differences of each value of the variable minus its mean, and divided by the number of observations minus 1. The covariances are just the crossproduct of the differences between each value and the mean of the variable. 
+
+For the R matrix: the diagonal elements correspond to the correlation of each variable with itselft wich will always be 1 and the off-diagonal elements correspond to the correlation among variables. Correlation values goes from -1 to 1. 1 being completely correlated and zero being no correlated. In this study we observed a postivie correlation of 0.78. This indicates that when one variable increases the other also increase in value and that the relationship is almost linear. This correlation coefficients are an indicator of how well we could predict the value of one variable by using a second one.
+
+2 Age-specific survival and reproduction were studied for a population, and summarized in matrix form in the file Leslie_matrix.csv. Convert the data frame to a matrix, L , using the as. matrix function (). The 1st row of the matrix represents per capita fecundity of each of 10 age classes. The sub-diagonal elements represent the fraction of individuals in age class i  that survive to age class i+1
+
+a) compute the eigenvectors and associated eigenvalues for the matrix. Highlight the dominant eigenvector (v) with its associated eigenvalue (lambda)
+```{r}
+setwd("C:/Users/descamil/OneDrive - purdue.edu/Purdue Folder/Fall_2019/Quantitative methods for ecology/Homeworks/Homework_1")
+##calling the dataset
+L<-read.csv("./Leslie_matrix.csv", header = F)
+L<- as.matrix(L) ##converting from dataframe to a matrix
+##calculating the eingenvalues using function eigen
+E<- eigen(L)
+Eigenvalues<-as.numeric(E$values) ##converting eigenvalues to numeric to remove the imaginary part
+print(Eigenvalues)
+
+
+```
+
+According to the results, the dominant eigenvalue is 1.04975 that in this case is the first eigenvalue.
+
+```{r }
+Eigenvectors<-E$vectors [,1]##extracting eigenvectors
+Eigenvectors<-as.numeric(Eigenvectors) ##converting to numeric 
+##the eigenvectors associated with the dominant eigenvalue is
+print(Eigenvectors)
+
+
+```
+The dominant eigenvectors are the eigenvectors associated with the first eigenvalue. 
+
+b) by definition an eigenvector has the property that multiplication of the eigenvector with the matrix from which it was derived yields the same answer as multiplication of the eigenvector with its associated eigenvalue
+
+
+```{r}
+##dominant eigenvectors were stored in previous step as the vector eigenvectors
+v<- Eigenvectors
+##extracting the dominant eigenvalue and storing it as a numeric value called lambda
+lambda<- Eigenvalues[1]
+
+##equation is L*v=lambda*v
+A<-L%*%v
+A
+B<-(lambda%*%v)
+t(B)
+
+
+
+
+```
+as we can observe both sides of the equation Lv=lambdav  are equal 
+
+c) Transform the elements of the dominant eigenvector so that they sum to 1
+```{r}
+##expressing elements dominant eigenvector "v" as a fraction
+v.fr<- v/sum(v)
+v.fr
+##checking the elements of the eigenvector sum up 1
+sum(v.fr)
+
+```
+
+d) create a vector of initial population size n0, with 1000 in the first age class and none in the other age classe
+
+```{r}
+##creating the vector
+Popsize<- as.matrix(c(1000, rep(0,9)))
+Popsize
+```
+I)Project the population to the next time step by using Ln0. Has the population grown, declined or stayed the same?
+
+```{r}
+Population<- L%*%Popsize
+Population
+
+```
+The population in the next stage has declined in 4 about individuals. 
+
+II)Instead of 1 time step, project the population forward t=100 time steps. It's much easier to use the matrix.power() function in package matrixcalc. 
+```{r}
+
+library(matrixcalc)
+L100<-matrix.power(L,100)
+Pop100<-L100%*%Popsize
+Pop100
+
+```
+III)compare the fraction in each age class at t=100 with the fraction represented in the dominant eigenvector
+```{r}
+#dominant eigenvector fractions were obtained in a previous point and stored in the vector v.fr
+v.fr<- round(v.fr,2)
+
+##calculating the fractions of the population on each age class after 100 generations. 
+Pop100.fr<- round((Pop100/sum(Pop100)),2)
+
+##making a table with both vectors to compare them
+comparison<-cbind(v.fr, Pop100.fr)
+colnames(comparison)<- c("v.fr","Pop100.fr")
+comparison
+```
+The fractions of each age class are the same as the fractions represented in the dominant eigenvector
+
+IV) compute the projected rate of change in the population from t=100 to t=101. Compare this projected rate of change to lambda
+
+```{r}
+library(matrixcalc)
+##calculating the population at time 100 (100 generations)
+L100<-matrix.power(L,100) ##obtaining the power 100 of the matrix L
+Pop100<-L100%*%Popsize ##multiplying the previous matrix with the vector Popsize(initial population created in point d)
+
+###calculating the population at time 101(101 generatons)
+L101<-matrix.power(L,101)##obtaining the power 101 of the matrix L
+Pop101<- L101%*%Popsize ##multiplying the previous matrix with the vector Popsize(initial population created in point d)
+
+
+##projected rate of change from generation 100 to 101
+a<-(Pop101-Pop100)
+a/Pop100
+
+##lambda
+lambda
+
+##
+log(lambda)
+```
+
+From time 100 to time 101 there is an increment in the number of individuals within each class of 5%. Lambda minus one.. the instantaneours rate of increase in a population can be calculated as ln[lambda] doing that we have tthe same rate of increase of 5%
+
+V) what do you conclude about the meaning of the dominant eigenvalue and eigenvector in the context of this age-structured population ?
+
+The eigenvectors tell us about the weight of each of the age classes in the total population. An the eigenvalue determines or tell us about the increment of the population from 1 stage to other. 
+
+3) Read the unstandardized data on measures of 150 Egyptian skulls from the file HW_Egyptian_skulls_cluster.csv. The first column is maximum breadth of the skull; column 2 is basibregmatic breadth; column 3 is basialveolar lenght; and column 4 is nasal height. 
+
+```{r}
+setwd("C:/Users/descamil/OneDrive - purdue.edu/Purdue Folder/Fall_2019/Quantitative methods for ecology/Homeworks/Homework_1")
+
+##calling the dataset
+Skull.dat<-read.csv("./HW_Egyptian_skulls_cluster.csv")
+head(Skull.dat)
+```
+
+a) conduct a hieracthical cluster analysis on standardized data. Use Ward's minimum variance method.
+```{r}
+Skull.dat<- as.matrix(Skull.dat)
+#standadizing the data
+Skull.dat.z<- scale(Skull.dat, center = TRUE, scale = TRUE)
+
+##calculating the distances
+Skull.d.z<-dist(Skull.dat.z)
+a<- hclust(Skull.d.z, method = 'ward.D2')	# Ward's minimum variance clustering
+
+```
+b) Plot the results and describe the number of clusters formed at a fusion distance of 7.3
+```{r}
+plot(a, main = "Ward's Minimum Variance", sub = '', ylab='Distance')
+abline(h=7.3, col="red")
+
+```
+
+At a fusion distance of 7,3 we can find 6 groups. It looks that the shape and dimesions of the skulls can be clasified into two big groups that them subdivide in six groups. From this 6 groups there are two groups that include a significant number of the skulls while there are other smaller four groups.
+It seems that there were two type of skulls that have been evolving in different sizes and shapes througt time. 
+
+c) Use the Ball-Hall and Callinski-Harabasz metrics to asses the best number of groups  of skulls to use in a K-means clustering analysis. Consider K=1-15. What do plots of changes in the values of succesive metrics suggest for a choice of K? explain
+
+```{r}
+
+opt <- matrix(data=NA, nrow=15, ncol=2)
+for (k in 1:15) {
+  cl <- kmeans(Skull.dat.z, k)
+  temp <- clusterCrit::intCriteria(Skull.dat.z,cl$cluster,c("Ball_Hall","Calinski_Harabasz"))
+  opt[k,1] <- temp$ball_hall
+  opt[k,2] <- temp$calinski_harabasz
+}
+
+##ploting results
+plot(opt[,1], xlab="Clusters", ylab="Ball-Hall")
+plot(opt[,2], xlab="Clusters", ylab="Calinski-Harabasz")
+
+
+```
+
+The metrics suggest that the best k is around 5. What we wanted with these test, it was to find the k where we can group the population in few groups with a low sum of squares withing each group. I decided to chose 5 because it's a point where we have gotten a significant reduction in the sum of squares of the cluster groups. Further down there are slightly reductions but not very huge. Checking Calinski-Harabasz that check the ratio between the sum of squares between groups and the sum of squares withing groups; this test it's a litlle harder to interpret because values sometimes increase again. However, looking both tests together I consider that with 5 clusters gives smaller values for both tests.
+
+conduct K-means clustering for the best choice of K. Interpret the clusters in the context of the 4 standardized skulls measurements. Provide graphs, boxplots,  or other supporting information
+
+```{r}
+##calling the dataset and standardizing
+Skull.dat<- read.csv("./HW_Egyptian_skulls_cluster.csv")
+Skull.dat<- as.matrix(Skull.dat)# converting dataset to a matrix
+#standadizing the data
+Skull.dat.z<- scale(Skull.dat, center = TRUE, scale = TRUE)
+
+#conducting k-means with the selected K
+cl<- kmeans(Skull.dat.z,6)
+
+```
+
+
+```{r}
+#converting to data.frame to extract the vectors
+Skull.dat.z<- as.data.frame(Skull.dat.z)
+##extracting each standardized variable as a vector
+x1 <- as.vector(Skull.dat.z$maxbr)
+x2 <- as.vector(Skull.dat.z$bbbr)
+x3 <- as.vector(Skull.dat.z$balen)
+x4 <- as.vector(Skull.dat.z$nasalht)
+
+##ploting boxplots for the different clusters for each variable
+par(mfrow=c(2,2))
+boxplot(x1~cl$cluster, main="Maximum breadth of the skull")
+boxplot(x2~cl$cluster, main="basibregmatic breadth")
+boxplot(x3~cl$cluster, main="basialveolar length")
+boxplot(x4~cl$cluster, main="nasal height")
+
+```
+
+The cluster 1 has the skulls with highest basibregmatic breadth, and they also have high values for the other variables (group with the bigger skulls). The skulls in cluster 2 have the lowest basibregmatic breadth and basialveolar lenght. Skulls in cluster three have average basialveolar lenght, basibregmatic breadth, maximum breadth of the skull, but lower nasal height (medium size skulls with lower nasal height). Skulls in cluster 4  have the lowest maximum breadth of the skull and nasal height, with high basialveolar lenght and average basibregmatic breadth. Skulls cluster 5 have low maximum breadth of the skull, and absialveolar lenght while having average basibregmatic breadth and nasal height. Finally cluster 6 have the highest nasal height, and average values for the other variables.
+
+Extra credit:
+Y is a binomial random variable with parameters n and p. Y describes the number of successes(e.g heads) in n independent binary trails, each with probability of success p. The probability distribution  for Y = y successes is p(Y=y)= 
+
+a) use dbinom() and the definition above to show that E(Y)= sumation y(py)=u=50 when n=100 and p=0.5
+```{r}
+##generatign 100 random numbers from 1 to 100 with mean 
+Y<-seq(1,100)
+##calculating the probability of each of the differen y (successes)
+Pr<-dbinom(Y, 100, 0.5)
+#calculating the expected value of Y    
+Exp.Y<- sum(Y*Pr)
+##printing expectaion of y and mean of y
+Exp.Y; mean(Y)
+
+```
+b) for a binomial random variable Y, var(Y)=np(1-p). Use function rbinom() to generate 1 million replicates of a binomial trial with n=100 and p=0.5, and compute the mean and variance for the 1 million replicates. how do these compare to E(Y) and var(Y)
+
+```{r}
+##generating the 1 million replicates
+replicates<- rbinom(1000000,100,0.5)
+##calculating the mean
+av.rep<- mean(replicates)
+av.rep
+#expectation of the Y is equal to n*p and also how we calculated in the previous point (a)
+Exp.Y
+
+#calculating the variance of the 1 million replicates
+var.rep<-var(replicates)
+var.rep
+
+##calculating the variance of y
+var.Y<-(100*0.5*(1-0.5))
+var.Y
+
+```
+the expected values of Y and var of Y are the same as the one obtained for the 1 million replicates of the binomial trial
+
+c) If we redefine our random variable from Y, number of successes to X, the difference in number of successes and failures
+  I) Solve for E(X) 
+  II) solve for var(K)=0
+  II)Use outcomes from b) to empirically check the correctness of the       algebraically derived solutions in I and II
+```{r}
+##calculating the vector of failures
+failures<- rbinom(1000000,100,0.5)
+##calculating the new variable X= #successes - #failures
+X<- replicates - failures
+##calculating the variance of this new variable
+var.X<- var(X)
+##calculating the mean of the new variable
+mean.X<-mean(X)
+##calculating the expected value of X and the variance of X with the derived functions
+Exp.X<- (2*100*0.5) -100
+var.X1<- (2*100*0.5)*(1-0.5)
+
+##printing results 
+mean.X ;Exp.X
+var.X; var.X1
+
+```
+We can observed that the values are basically the same for the mean and the variance of the new variable derived from the previous equations and the one obtaining from the 1 million replicates data.  
+  
+
+  

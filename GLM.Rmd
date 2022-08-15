@@ -1,0 +1,309 @@
+---
+title: "Homework_4"
+author: "Diana Escamilla"
+date: "November 10, 2019"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+Data from invasive plants was collected from 95 plots (1/4 ha each). Measures include invasive plant specie, site characteristics and landowner information. 
+
+```{r}
+data<-read.csv("./Invasives_Indiana.csv")
+```
+
+1) conduct a Poisson regression with the number of invasive species as a response and forest area and distance to road as predictors. Use standardized preictor variables.
+
+a) which of the predictors are significant explain 
+```{r}
+##Standardizing the variables
+y<- data$Nspp_inv
+x<- data[,c(2,5)]
+x.z <- scale(x, center=TRUE, scale=TRUE)   # standardize data
+dat.z<- as.data.frame(cbind(y,x.z))
+
+###Fitting the poisson model 
+out <- glm(y ~ Forest_ha + Dist_road, family=poisson, data=dat.z)
+summary(out)
+
+
+```
+ Based on the Wald inference test both predictors are contribuiting significantly to the model. For this test the null hypothesis is that the parameters (Betas) for the explanatory variable are zero. The p-value for this test is significant for the intercept and the coefficients of both explanatory variables, indicating that the two explanatory variables should be kept in the model. 
+ 
+ b) what is the estimated dispersion parameter c, and what do you conclude about overdispersion ? provide evidence of your conclusion
+```{r}
+# Test for overdispersion
+chat <- function(object) {
+pr <- residuals(object,"pearson")  #Pearson residuals from object out
+cat("overdispersion ratio, chat, is ", sum(pr^2)/object$df.residual, "\n")
+cat("p-value for null that chat = 1 is ", pchisq(sum(pr^2),object$df.residual,lower=FALSE), "\n")
+}
+
+##testing the model for overdisperssion
+chat(out) 
+
+##Creating plots of predicted vs residuals with DHARMA package
+library(DHARMa)
+simulationOutput <- simulateResiduals(fittedModel = out, n = 250)
+plot(simulationOutput)
+
+##histogram of response variable
+library(ggplot2)
+data$Nspp_inv<- as.numeric(data$Nspp_inv)
+ggplot(data, aes(x= Nspp_inv)) + geom_histogram(color="blue", fill="lightblue", binwidth = 1)+ labs(title="Invasive species histogram plot",x="Invasive species (abundance/0.25 ha)", y = "Count")
+
+```
+Overdispersion occurs when the variability accounted for by the poisson distribution is not sufficient to account for the observed variability in the dataset. When the overdispersion parameter is 1 or close to 1 it means that there is not overdispersion and the distribution is appropriate, which is the null hypothesis. In the tested model for invasive plants abundance the overdisperion ratio was of 1.59 and the p-value of the chi-square test was < 0.05, which indicates that there is overdisperion and it is significant. This overdispersion can be observed in the residual vs predicted plot where we can observe that the pattern of the points is not flat which indicates there is variance misspecification. We an also observe some deviations of the observed values from the expected in the QQ plot of the residuals. The deviations from expected are not extremely severe, and the overdispersion parameter is not too distant from 1 (that is considered as no overdispersion), so we could say that the overdispersion problem is not severe but still need to be adress.In the histogram of the response variable we can observe an excess of zeros, which probably is the cause of overdispersion.
+ 
+ c) Provide wald statistics for each predictor variable before and after correcting for the dispersion parameters. How did the coefficients, wald statistic, standard error, and p-value change
+ 
+```{r}
+##coeficcient and wald test, standard error and p-value before correcting for overdisperssion
+summary(out)
+##procedure to adjust manually for overdispersion
+c.hat <- sum(residuals(out,type="pearson")^2)/out$df.residual #Pearson X2 divided by df
+
+##after correcting for overdispersion
+##adjusting for overdisperions via quasipoisson 
+out.q <- glm(dat.z$y ~ dat.z$Forest_ha + dat.z$Dist_road, family = quasipoisson(link="log"))
+summary(out.q)
+
+
+```
+By comparing the summary of the models before and after overdispersion correction, we can see that the coefficients didn't change; and the standard errros and wald-test and p-values for the coefficients increased. There was a slightly increase in the standard error of the parameters, and an increase in the wald statistic and higher p-values, but still significant. These changes are due to the adjustment for overdispersion where the standard error of the parameters is multiplied by the root square of the overdisperion parameter (?????), which makes them increase and therefore, there are also changes in the wald test and the p-values. While, the coefficients remains unchanged. 
+
+ 
+ 2) Refit the model with negative binomial and zero-inflated possion distributions
+ 
+```{r}
+##fit a negative binomial model
+library(VGAM)
+library(pscl)
+library(MASS)
+library(LogisticDx)
+model.nb = glm.nb(y ~ Forest_ha +Dist_road,  data=dat.z)
+summary(model.nb)
+chat(model.nb)
+
+##zero inflated model 
+model.zip = zeroinfl(y ~ Forest_ha+ Dist_road|1,  data=dat.z) ##setting the count is given by the two x varaibles and the zero-inflation is ffited with only an intercept
+summary(model.zip)
+chat(model.zip)
+```
+ 
+ a) How did the dispersion parameter change for each model (relative to the Poisson distribution)? Is overdispersion an issue for either of these models? explain
+ 
+For the negative binomial model there is significant overdsipersion with an overdipserion ratio higher than 1 (1.28) and p-value <0.05 (0.04), the values are similar to the values of overdispersion and p-value for the Poisson model. This indicates that the negative binomial model doesn't account well for all the variation in the response variable and doesn't correct the overdisperion problem. While, the zero-inflated model has an overdispertion ratio close to 1 (0.83) and a p-value > 0.05 (0.8) indicating that there is not overdispersion. Therefore, the zero-inflated model (used to correct overdisperion due to excess of zeroes) was able to account for more variation than the Poisson model eliminating the overdispertion while the negative binomial did not produce a significant change (it's also use to correct overdisperision). SO, we can also conclude that the overdispersion in this dataset was caused by excess of zeroes as observed previously in the histogram plot. 
+ 
+ b) Compare predicted counts for the 2 models when the two covariates are at their mean values. Explain discrepancies in the predicted values
+ 
+```{r}
+##mean of raw data covariates
+#mean(data$Forest_ha)
+#mean(data$Dist_road)
+##Poisson model
+new.dat<- data.frame (Forest_ha= 0, Dist_road =0)
+a<-cbind(new.dat, 
+      Mean = predict(out, newdata = new.dat, type = "response"), 
+      SE = predict(out, newdata = new.dat, type = "response", se.fit = T)$se.fit
+      )
+a
+# negative binomial model
+b<-cbind(new.dat, 
+      Mean = predict(model.nb, newdata = new.dat, type = "response"), 
+      SE = predict(model.nb, newdata = new.dat, type = "response", se.fit = T)$se.fit
+      )
+b
+##zero-inflated model
+c<-cbind(new.dat, 
+      Mean = predict(model.zip, newdata = new.dat, type = "count"), 
+      SE = predict(model.zip, newdata = new.dat, type = "zero")
+      )
+c
+```
+ 
+When the covariates are at the mean values (they were standardized so the mean value will be zero), the response value in those conditions should be the intercept of each model and they are 1.44, 1.44 and 1.59 for the Poisson, negative binomial and zero-inflatted models. Then, checking for the predicted values we have that the zero-inflated model has a higher predicted value compare with the negative binomial model. It is expected to obtained different predictions from these two models because they have model the response variable with two different distributions. Where the negative binomial fits an additional parameter to account for overdispersion  and the zero-inflated model increases the likelihood of zero counts. 
+ 
+ c) compare model using AICc. Which model is the best?
+```{r}
+library(MASS)
+library(pgirmess)	# Useful for comparing models according to Burnham and Anderson
+library(MuMIn) 
+library(car) 
+library(effects)
+out1 <- selMod(list(out,model.nb,model.zip), Order="AICc")
+out1
+
+```
+ 
+The corrected Akaike information criterion is a score that gives you a way to measure the goodness-of-fit of your model, and at the same time penalize the model for over-fitting the data.The corrected information criteria only corrects for small sampling sizes. When comparing models the smaller AICc indicates bettter models. So, in this case we have that the best model is the zero-inflated model, followed by the negative binomial model and the worst model was the Poisson model.
+ 
+ d) provide an ecological interpretation from the best model
+```{r}
+library(sjPlot)
+library(sjmisc)
+library(ggplot2)
+data(efc)
+theme_set(theme_sjplot())
+
+model.zip$coefficients
+a<-exp(out$coefficients)
+a
+##plotting effects i found this package to plot the effects of this zero inflated model 
+plot_model(model.zip, type = "pred", terms = "Forest_ha", title = "predict count of invasive plant species")
+plot_model(model.zip, type = "pred", terms = "Dist_road",title = "predict count of invasive plant species")
+
+
+```
+The best model was the zero inglated model and according with the results we have that for 1 unit increase in the total forest area, the expected  number of invasive plants will decrease (sign of the coefficient is negative) by a factor of exp(-0.3309) = 0.627, while holding all other variables in the model constant.Similarly happen with distance to the nearest road where for 1 unit increase in distance to closes road, the expected number of invasive plants will decrease by a factor of exp(-0.2401) = 0.625 while holding all other variables in the model constant. This indicates that in areas farther from the civilization (roads, houses, etc.) and bigger forest area are less likely to have a high presence of invasive plants per area evaluated (1/4 ha).
+ 
+ 3) Create a set of candidate models with number o invasive species as reponse and a combination of other variables in the dtaset. In addition to the best model from problem2, fit a model of biotic resistance (number of native tree species only), a model with site characteristic (distance to road, forest area, topography), and a model with landowner information (landowner income and landowner cooperation level). Fit all models with the same distribtution for the response.
+ 
+```{r}
+###fitting the four models 
+model.zip ##the best model from point 2
+
+##
+x1<- data[,c(4,6,7)]
+x1$Nspp_nat_tree<- as.numeric(x1$Nspp_nat_tree)
+x1$Topo<- as.numeric(x1$Topo)
+x1$Owner_income<- as.numeric(x1$Owner_income)
+x1.z <- scale(x1, center=TRUE, scale=TRUE)   # standardize data
+dat.1z<- as.data.frame(cbind(dat.z,x1.z, data[,8]))
+colnames(dat.1z)[7]<- "Owner_coop"
+
+
+##model for biotic resistance
+model.zip1 = zeroinfl(y ~ Nspp_nat_tree | 1,  data=dat.1z)
+
+##model for site characteristic
+model.zip2 = zeroinfl(y ~ Forest_ha + Dist_road + Topo | 1,  data=dat.1z)
+#
+##model for landowner information
+model.zip3 = zeroinfl(y ~ Owner_coop + Owner_income | 1,  data=dat.1z) 
+
+
+library(pgirmess)
+outsel<- selMod(list(model.zip, model.zip1, model.zip2,model.zip3), Order="AICc")
+outsel
+
+```
+Comparing the model based on the AICc criteria we have that the best model is the model with landowner information, where the explanatory variable wwere owner income and owner cooperation. The next best model was the model for biotic resistance (native tree abundance as explanatroy variable), followed by the first model with fit of forest area and distance to close road as explanatory variables.  
+ 
+ b) provide ecological interpretation of the best model. Use effect plots or other graphics to support your interpretaion
+ 
+```{r}
+library(effects)
+b<-model.zip3$coefficients[[1]]
+b
+a<-exp(b)
+a
+##plot the effects the AllEffects doesn't work so I found other package to do it 
+plot_model(model.zip3, type = "pred", terms = c("Owner_income","Owner_coop"), title = "predict count of invasive plant species")
+plot_model(model.zip3, type = "pred", terms = "Owner_income", title = "predict count of invasive plant species")
+plot_model(model.zip3, type = "pred", terms = "Owner_coop", title = "predict count of invasive plant species")
+```
+ 
+ For the best model, we have that when owners are willing to cooperate with the implementation of managment practices, the expected  number of invasive plants will be lower no matter the owner income compare with owners that are neutral or unwilling. We can also observed that for owners that are neutral or unwilling to cooperate there is an influence on the owner income in the presence of invasive species. Higher income less presence of invasive species. So, what we could conclude is that owners willing to implement managment strategies and having a higher income, favors the reduction of invasive specie abundance.
+ 
+ 4) In order to improve invasive species managment, efforts are being made to get landowners to cooperatively manage for invasive species. Using the landowner willingness to remove invasive species as a reponse variable
+ 
+ a) fit a multinomial regression model with predictor variables of forest size and landowner income. Use the unwilling category as your baseline.
+ 
+```{r}
+##loading libraries
+library(mlogit) # Multinomial regression (a bit different)
+library(nnet)   # Multinomial regression - more "glm standard"
+library(car)
+library(effects)
+library(MASS)  
+
+###fitiing the multinomial model
+dat.2z<- cbind(data$Owner_coop, dat.1z[,c(2,6)])
+colnames(dat.2z)[1]<- "Owner_coop"
+levels(dat.2z$Owner_coop)
+##reordering to have the unwilling as a baseline
+dat.2z$Owner_coop <- factor(dat.2z$Owner_coop, levels(dat.2z$Owner_coop)[c(2,1,3)])
+#dat.2z$`data$Owner_coop`<- as.numeric(as.factor(data$Owner_coop))
+out.1<- multinom(Owner_coop ~ Forest_ha + Owner_income, data= dat.2z)
+
+##obtaining a summary of the model and requesting the wald inference test
+
+summary(out.1, Wald=TRUE)
+
+Anova(out.1) 
+
+
+```
+
+i) which of the variables are significant
+Either forest size and landowner income are significant variables, which means both predictor variables are contributing significantly in explaining the variance in the landowner willingness to remove invasive species. So, we have that for the neutral regression the coefficient for forest size is 3.2 and -0.3 for owner income. Thus, the probability of an owner of being neutral relative to unwilling, increases with forest size and  diminishes with high owner income. For the willing regression the coefficient for forest size is 4.42 and 1.7 for owner income. Thus, the probability of an owner of being willing relative to unwilling increases with forest size and owner income. 
+
+ii) test if interaction term should be included in the final model?. What do you conclude?
+```{r}
+out.2<- multinom(Owner_coop ~ Forest_ha * Owner_income, data= dat.2z)
+
+##obtaining a summary of the model and requesting the wald inference test
+
+summary(out.2, Wald=TRUE)
+Anova(out.2)
+```
+
+Based on the resulst We conclude that the interaction among forest size and owner_income is not significant with a p-value of 0.33, so this term should be removed from the model.
+ 
+III what are the effects of the predictor variables on the response? provide effects plots to illustrate the relationship
+ 
+```{r}
+plot(allEffects(out.1))
+```
+ 
+ So, in the effect plots we can observe that the probatility that the owner will be willing to implement managment practices relative to be unwilling increases with the forest area.  In the case of the probability of the owner of being neutral relative to unwilling, we have that it will  have a higher probability of being neutral whe the forest size is of an average size. 
+ In the case of owner income we can also observe that the probability of an owner of being willing to cooperate relative to being unwilling increaases when the owners have higher income, and opposite the probatility of an owner of being neutral rather than unwilling reduces with higher income of the owners. 
+ So, we can say that owners located in sites with a bigger forest area and higher income are more likely to participate in implementing management practices for invasive plant species. while owners located in areas with intermedia (average) forest size and lower income are more likely to be neutral in the decision of participate in the control of invasive species. 
+ 
+ b. Willingness is often considered to be an ordinal response. Refit the model using a proportional odds logistic model
+ 
+```{r}
+library(mlogit)
+
+data.plr <- polr(Owner_coop ~ Forest_ha + Owner_income,
+                   method= "logistic", data = dat.2z) 
+
+#data.plr
+summary(data.plr)
+#names(data.plr)
+
+##significant of coefficients and intercepts
+summary_table <- coef(summary(data.plr))
+pval <- pnorm(abs(summary_table[, "t value"]),lower.tail = FALSE)* 2
+summary_table <- cbind(summary_table, "p value" = round(pval,3))
+summary_table
+
+coefficients<- summary_table[,1]
+exp(coefficients)
+
+plot(allEffects(data.plr))
+
+
+```
+ i) provide an interpretation of the model 
+ 
+ So, according with the effect plots we have that the probatility of an owner of being willing to implement managment practices relative to be unwilling
+ will increase with bigger forest areas and higher owner income. while, the probability of an owner of being neutral relative to unwilling will increase when forest area is intermedia (average sizes) and lower income. 
+ 
+ Thus, similarly to previous point we have that owners with higher income and located in bigger forest area are more likely to be willing to cooperate with managment practices to control invasive species than owners that have lower income and are located in smaller forest area. While, owners located in forest of average size and lower to average income, are more likelty to be neutral for implementing this control practices. 
+ 
+ ii) which model best fits the data, the proportional-odds logistic model or the multinomial model? explain
+ 
+```{r}
+out2 <- selMod(list(out.1,data.plr), Order="AICc")
+out2
+```
+ 
+ 
+ Based on the corrected AICc scores the best model is the mulinomial model. 
+ 
+ 
+ 
